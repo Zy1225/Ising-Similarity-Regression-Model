@@ -1,4 +1,4 @@
-estimate_sparse_Ising_similarity = function(Y,W,fold_id, type = 'penalized', true_K = NULL){
+estimate_sparse_Ising_similarity = function(Y,W,fold_id = NULL, type = 'penalized', true_K = NULL){
   n = dim(Y)[2]; p = dim(Y)[1]; K = dim(W)[3]
   
   if(is.na(K)){K=1}
@@ -29,6 +29,28 @@ estimate_sparse_Ising_similarity = function(Y,W,fold_id, type = 'penalized', tru
     hat_theta_jj = est_parameters[1:p]
     hat_alpha = est_parameters[(p+1): (p+K)]
     best_lambda = cv.adalasso$lambda.min
+  }
+  
+  if(type == 'BIC'){
+    glmnet_fit <- glmnet(glm_X, glm_Y, family = "binomial", alpha=1, standardize= TRUE, intercept = FALSE, penalty.factor= c(rep(0,p),ad.weight) )
+    est_parameters = predict(glmnet_fit,type="coefficients")[2:(p+K+1),]
+    BIC_vec = apply(est_parameters,2 , FUN = function(x){
+      -2 * sum(glm_Y * (glm_X %*% x) - log( 1 + exp(glm_X %*% x) )) + sum( x[-c(1:p)] != 0 ) * log(n)
+    })
+    hat_theta_jj = est_parameters[1:p,which.min(BIC_vec)]
+    hat_alpha = est_parameters[(p+1): (p+K),which.min(BIC_vec)]
+    best_lambda  = glmnet_fit$lambda[which.min(BIC_vec)]
+  }
+  
+  if(type == 'AIC'){
+    glmnet_fit <- glmnet(glm_X, glm_Y, family = "binomial", alpha=1, standardize= TRUE, intercept = FALSE, penalty.factor= c(rep(0,p),ad.weight) )
+    est_parameters = predict(glmnet_fit,type="coefficients")[2:(p+K+1),]
+    AIC_vec = apply(est_parameters,2 , FUN = function(x){
+      -2 * sum(glm_Y * (glm_X %*% x) - log( 1 + exp(glm_X %*% x) )) + sum( x[-c(1:p)] != 0 ) * 2
+    })
+    hat_theta_jj = est_parameters[1:p,which.min(AIC_vec)]
+    hat_alpha = est_parameters[(p+1): (p+K),which.min(AIC_vec)]
+    best_lambda  = glmnet_fit$lambda[which.min(AIC_vec)]
   }
   
   if(type == 'unpenalized'){
