@@ -478,4 +478,5 @@ theta_plot= ggnet2(final_theta_net, mode = c("x","y"), color = 'party', color.le
   scale_color_manual(name = 'Party',values = c('cyan','purple')) 
 
 
+
 ggarrange(state_plot,party_plot,twitter_plot,theta_plot, common.legend = T, legend = 'bottom')
