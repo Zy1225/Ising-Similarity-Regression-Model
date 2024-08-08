@@ -8,6 +8,7 @@ library(GGally)
 
 
 here::i_am("Application/application.R")
+library(here)
 source(here("Code","estimate_sparse_Ising_similarity.R"))
 source(here("Code","empirical_cov.R"))
 
@@ -359,12 +360,15 @@ set.seed(1)
 sub_W_mat = W[sub_senators, sub_senators, c(15,1,2)]
 sub_alpha = real_data_result$hat_alpha[c(15,1,2)]
 
+party[party == 'R'] = 'Republican'
+party[party == 'D'] = 'Democrat'
 #Color for party: Democrat-Cyan, Republican-Purple
 color_party = rep(NA,100)
-color_party[party == "D"] = "cyan"
-color_party[party == "R"] = "purple"
+color_party[party == "Democrat"] = "cyan"
+color_party[party == "Republican"] = "purple"
 color_party = color_party[sub_senators]
 names(color_party) = party[sub_senators]
+
 
 #Twitter follower-followee relationship 
 twitter_net = as.network(sub_W_mat[,,1], directed =  FALSE, matrix.type = 'adjacency', print.adj = T, ignore.eval = FALSE, names.eval = 'weight')
@@ -414,9 +418,64 @@ set.edge.attribute(theta_net, "edge_linetype", ifelse(theta_net %e% "weight" > 0
 set.edge.attribute(theta_net, "edge_alpha_median", ifelse(theta_net %e% "weight" > median(theta_mat), 1,0))
 theta_net %e% 'weight' =  abs(theta_net %e% 'weight')
 
-theta_plot= ggnet2(theta_net, mode = c("x","y"), color = 'party', color.legend = 'Party', label = "state", label.color = "color", alpha = 0, edge.size = 'weight',edge.lty = 'edge_linetype', edge.alpha = theta_net %e% 'edge_alpha_median') + ggtitle('Theta') + theme(plot.title = element_text(hjust = 0.5))+ 
+theta_df = as.data.frame(theta_net)
+for(i in 1:nrow(theta_df)){
+  if(theta_df$edge_alpha_median[i] == 0){
+    theta_net[theta_df$.tail[i], theta_df$.head[i]] = 0
+    theta_net[theta_df$.head[i], theta_df$.tail[i]] = 0
+  }
+}
+theta_df = as.data.frame(theta_net)
+
+
+####Checking if the edges from Theta after removing State and Party edges, is a subset of Twitter edges
+theta_edge = as.edgelist(theta_net)
+theta_edge_c = paste0(theta_edge[,1],',',theta_edge[,2])
+twitter_edge = as.edgelist(twitter_net)
+twitter_edge_c = paste0(twitter_edge[,1],',',twitter_edge[,2])
+party_edge = as.edgelist(party_net)
+party_edge_c = paste0(party_edge[,1],',',party_edge[,2])
+state_edge = as.edgelist(state_net)
+state_edge_c = paste0(state_edge[,1],',',state_edge[,2])
+
+
+#theta_edge_c_removing_state_party =theta_edge_c[ (!theta_edge_c %in% state_edge_c )& (!theta_edge_c %in% party_edge_c) ]
+theta_edge_c_removing_state_party =theta_edge_c[ !(theta_edge_c %in% union(state_edge_c, party_edge_c)) ]
+mean(theta_edge_c_removing_state_party %in%  twitter_edge_c)
+
+### Setting edges in theta_net that is between pairs of senators from different party AND different state to a different color 
+edge_color_mat = matrix(0.5, nrow = 20, ncol =20)
+for(i in 1:length(strsplit(theta_edge_c_removing_state_party, ','))){
+  row_ind = as.numeric(strsplit(theta_edge_c_removing_state_party, ',')[[i]][1])
+  col_ind = as.numeric(strsplit(theta_edge_c_removing_state_party, ',')[[i]][2])
+  edge_color_mat[row_ind,col_ind] = edge_color_mat[col_ind,row_ind] = 1
+}
+diag(edge_color_mat) = 0
+
+edge_color_net = as.network(edge_color_mat , directed = FALSE, matrix.type = 'adjacency', ignore.eval = FALSE, names.eval = 'weight')
+network.vertex.names(edge_color_net) = full_names[sub_senators]
+edge_color_net %v% "state" = state[sub_senators]
+edge_color_net %v% "party" = party[sub_senators]
+edge_color_net %v% "color" = color_party
+edge_color_net %v% "x" = x[, 1]
+edge_color_net %v% "y" = x[, 2]
+
+#
+final_theta_net  = as.network(sub_theta_mat, directed = FALSE, matrix.type = 'adjacency', ignore.eval = FALSE, names.eval = 'weight')
+network.vertex.names(final_theta_net) = full_names[sub_senators]
+final_theta_net %v% "state" = state[sub_senators]
+final_theta_net %v% "party" = party[sub_senators]
+final_theta_net %v% "color" = color_party
+final_theta_net %v% "x" = x[, 1]
+final_theta_net %v% "y" = x[, 2]
+
+set.edge.attribute(final_theta_net, "edge_linetype", ifelse(final_theta_net %e% "weight" > 0, 1, 3))
+set.edge.attribute(final_theta_net, "edge_alpha_median", ifelse(final_theta_net %e% "weight" > median(theta_mat), 1,0))
+final_theta_net %e% 'weight' =  abs(final_theta_net %e% 'weight')
+set.edge.attribute(final_theta_net, "edge_color", ifelse(edge_color_net %e% "weight" == 1, 'red','grey50'))
+
+theta_plot= ggnet2(final_theta_net, mode = c("x","y"), color = 'party', color.legend = 'Party', label = "state", label.color = "color", alpha = 0, edge.size = 'weight',edge.lty = 'edge_linetype', edge.alpha = final_theta_net %e% 'edge_alpha_median', edge.color = 'edge_color') + ggtitle('Theta') + theme(plot.title = element_text(hjust = 0.5))+ 
   scale_color_manual(name = 'Party',values = c('cyan','purple')) 
 
 
 ggarrange(state_plot,party_plot,twitter_plot,theta_plot, common.legend = T, legend = 'bottom')
-
